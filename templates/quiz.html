@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block welcome %}
+<h1>Quiz</h1>
+
+
+<h1>
+  <form method="post" action="{{ url_for('quiz') }}">
+  <label for="n"># questions:</label>
+  <input id="n" type="number" name="n" min="1" step="1" value="{{ num_of_ques }}" required>
+  <button type="submit">Start / Update</button>
+  </form>
+
+  <div id="question-box"
+       hx-get="{{ url_for('quiz_current') }}"
+       hx-trigger="load"
+       hx-target="#question-box"
+       hx-swap="outerHTML">
+    Loading question…
+  </div>
+</h1>
+{% endblock %}
+

@@ -1,0 +1,7 @@
+
+
+{% set items = current or [] %}
+<p><strong>Current Selection:</strong>
+   <em>{{ items|join(' ') if items else 'none' }}</em>
+</p>
+

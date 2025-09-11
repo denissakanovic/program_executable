@@ -1,0 +1,111 @@
+<div id="question-box">
+  {% if message %}
+    <p style="margin-top:.5rem"><strong>{{ message }}</strong></p>
+  {% endif %}
+
+  {% if not finished and (idx is defined) and (total is defined) %}
+    <p><em>Question {{ (idx|default(0, true)) + 1 }} of {{ total|default(0, true) }}</em></p>
+  {% endif %}
+
+  {% if state and state.img_url %}
+    <img src="{{ state.img_url }}" alt="Venn diagram"
+         style="max-width:640px;width:90%;height:640px;">
+  {% endif %}
+
+  {% if state %}
+    <p class="question-text" style="margin-top:1rem;"><strong>{{ state.question }}</strong></p>
+
+    <form hx-post="{{ url_for('quiz_check') }}"
+          hx-target="#question-box"
+          hx-swap="outerHTML">
+      <label>Your answer:</label>
+      <input type="text" name="ans" autocomplete="off" required>
+      <button type="submit">Submit</button>
+      <span>Tries left: {{ tries|default(2, true) }}</span>
+    </form>
+  {% endif %}
+
+  {% if finished %}
+    <p>{{ score|default(0, true) }}/{{ total|default(0, true) }}</p>
+
+    <div style="margin-top:1rem;">
+      <table style="margin:0 auto;border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="border:1px solid #ccc;padding:4px 8px;">Skill</th>
+            <th style="border:1px solid #ccc;padding:4px 8px;">Correct</th>
+            <th style="border:1px solid #ccc;padding:4px 8px;">Asked</th>
+            <th style="border:1px solid #ccc;padding:4px 8px;">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in per_skill %}
+            <tr>
+              <td style="border:1px solid #ccc;padding:4px 8px;">{{ row.skill }}</td>
+              <td style="border:1px solid #ccc;padding:4px 8px;">{{ row.correct }}</td>
+              <td style="border:1px solid #ccc;padding:4px 8px;">{{ row.asked }}</td>
+              <td style="border:1px solid #ccc;padding:4px 8px;">{{ row.percent }}%</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+
+  {# centered table, if you’re showing it here #}
+  <div style="display:flex;justify-content:center;margin-top:1rem;">
+    <table style="border-collapse:collapse;margin:0 auto;">
+      <!-- your headers/rows using per_skill -->
+    </table>
+  </div>
+
+  <div style="margin-top:1rem; text-align:center;">
+    <button
+      hx-post="{{ url_for('quiz_restart') }}?reset=1"
+      hx-target="#question-box"
+      hx-swap="outerHTML"
+    >
+      Restart
+    </button>
+
+    {# Optional: a HARD restart that also clears selected skills & n #}
+    <!--
+    <button
+      hx-post="{{ url_for('quiz_restart') }}?hard=1"
+      hx-target="#question-box"
+      hx-swap="outerHTML"
+      style="margin-left:.5rem;"
+    >
+      Restart (clear skills)
+    </button>
+    -->
+  </div>
+
+  <div style="margin-top:1rem; text-align:center;">
+    <button
+      hx-post="{{ url_for('quiz_restart') }}"
+      hx-target="#question-box"
+      hx-swap="outerHTML"
+      style="width: 140px;"
+
+      ><a href="/" style="text-decoration: none;">
+      Exit w/ Skills</a>
+    </button>
+  </div>
+
+  <div style="margin-top:1rem; text-align:center;">
+    <button
+      hx-post="{{ url_for('quiz_restart') }}?hard=1"
+      hx-target="#question-box"
+      hx-swap="outerHTML"
+      style="width: 140px;"
+
+      ><a href="/" style="text-decoration: none;">
+      Exit w/o Skills</a>
+    </button>
+  </div>
+
+  {% endif %}
+
+</div>
+

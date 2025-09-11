@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Home Page{% endblock %}
+
+{% block welcome %}
+
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+<style>
+
+  .center_stuff {
+    position: relative; 
+    margin-left: 40%;
+    padding: 0;
+    margin-bottom: -10px;
+  }
+
+  .menu_style {
+    color: white;
+  }
+</style>
+
+
+
+<div style="
+  max-width: 800px;         /* controls line length */
+  margin: 0 auto;           /* centers the whole block */
+  display: grid;
+  justify-items: center;    /* centers children */
+  gap: .75rem;
+">
+
+  <div style="white-space: pre-wrap; margin-left: 23%;
+    margin-top: 3%">
+    {{- dic["menu"]|trim -}}
+  </div>
+
+  <div id="result"
+       hx-get="{{ url_for('selection_current') }}"
+       hx-trigger="load, quiz:changed from:body"
+       hx-swap="innerHTML"
+       style="margin-left: 5%"
+       >
+      
+    <p><strong>Current Selection:</strong>
+    <em>none</em></p>
+  </div>
+
+  <div style="margin-right: 16%;">
+  <form
+  hx-post="{{ url_for('run') }}"
+  hx-target="#result" 
+  hx-swap="innerHTML"
+  class="center_stuff">
+
+  <div style="text-align: center;">
+    <input id="ans" type="text" name="ans" placeholder="e.g. AS vd vb"
+    style="margin-bottom: 5%;">
+    <button type="submit">Submit</button>
+
+    <button type="button" hx-post="{{ url_for('clear')}}" 
+            hx-target="#result"
+            hx-swap="innerHTML">Clear</button>
+
+    <button type="button" 
+      onclick="window.location='{{ url_for('quiz') }}'">Start Quiz
+    </button>
+  </div>
+  </form>
+  </div>
+</div>
+
+
+
+
+{% endblock %}

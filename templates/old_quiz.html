@@ -1,0 +1,46 @@
+{% extends "base.html" %} 
+
+<style>
+
+</style>
+
+
+{% block welcome %}
+
+<h1>
+Skills: {{skills}}
+</h1>
+
+
+
+<h1>
+<form method="post" action="{{ url_for('quiz') }}">
+  <label for="n"># questions:</label>
+  <input id="n" type="number" name="n" min="1" step="1" 
+  value="{{ num_of_ques }}" required>
+  <button type="submit">Submit</button>
+</form>
+</h1>
+
+<h1>
+Number of questions: {{num_of_ques}}
+</h1>
+
+
+<h1>
+
+  {% for row in ques_info['items'] %}
+  input
+  {% if user_input == row.answer %}
+  ...
+  {% else %}
+
+  {% endif %}
+
+  {% endfor %}
+
+</h1>
+
+
+
+{% endblock %} 

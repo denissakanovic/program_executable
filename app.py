@@ -1,9 +1,11 @@
 import os
 import matplotlib
 from collections.abc import Callable
+import re
 from re import L
 from math import e
 import sys
+
 
 # Denis Model
 
@@ -11,22 +13,53 @@ import sys
 # ls: include parantheses
 # all karnaugh map stuff/default to original functions
 
-# Instructions:
-# update global dictionary for each func
-# separate venn3
-
 ##################################
-updated_on = '09/02/25 @ 2:57pm'
+updated_on = '09/05/25 @ 2:00 AM'
 ##################################
 
-#import modules
+# All App Layer Modules
 import matplotlib.pyplot as plt
 from matplotlib_venn import venn2, venn2_circles, venn3, venn3_circles
 import numpy as np 
 import random
 import time
 import os
+import string
 from datetime import datetime, timedelta
+
+################################################################################
+# All Web App Modules
+import matplotlib
+import io, base64, uuid
+matplotlib.use("Agg")  # headless backend
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from textwrap import dedent
+
+app = Flask(__name__) # This is initializing my flask app 
+app.config['SECRET_KEY'] = 'pq569'  
+
+#copy pasta
+# save matplot diagram to a png
+
+def fig_to_static_url(fig, subdir="q"):
+    """Save fig under static/subdir/<id>.png and return its URL."""
+    img_id = f"{uuid.uuid4()}.png"
+    dir_path = os.path.join(app.static_folder, subdir)
+    os.makedirs(dir_path, exist_ok=True)
+    file_path = os.path.join(dir_path, img_id)
+    fig.savefig(file_path, format="png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return url_for("static", filename=f"{subdir}/{img_id}")
+
+def build_queue(skills, ask_list, shuffle=False):
+    q = []
+    for s, c in zip(skills, ask_list):
+        q.extend([s] * int(c))
+    if shuffle:
+        random.shuffle(q)
+    return q
+
+
 
 ################################################################################
 # globals
@@ -34,17 +67,9 @@ DNF_OPS = ['n', 'u']
 DNF_VARS = ['A', 'B', 'C']
 QUESTION_TUPLE = ('abc', 'num', 'nums')
 
-import random
-
-def in_notebook_process() -> bool:
-    # will be false since we are creating an executable 
-    # true if we are running source within python kernel (terminal, colab, etc)
-    try:
-        from IPython import get_ipython
-        ip = get_ipython()
-        return bool(ip and "IPKernelApp" in ip.config)
-    except Exception:
-        return False
+choice_list = ['all',
+              'as','vb','vd','bd','db','so','rn','ca','ps','dm','sb','ss','v1','v2','v3',
+              'al','ls','pt','kp','pk','cp', 'ct', 'ck', 'pe']
 
 def clean_dnf(dnf):
   # this function will get the answer for randomly generated dnf
@@ -189,11 +214,12 @@ def list_to_string(ans_list):
 ################################################################################
 
 # venn 1 set
-from IPython.display import Image, display
+#from IPython.display import Image, display
 import glob
 
 def v1_create():
   # use venn2 to create venn1
+
   U = random.randint(60, 100)
   A = random.randint(1, U - 1)
   _A = U - A
@@ -232,15 +258,7 @@ def v1_create():
   plt.text(-0.7, 0.7, f'U = {U}')
   plt.text(0.9, -0.7, _A)
 
-  out = os.environ.get("plot_output", "plot.png")
-  george_boole = in_notebook_process()
-
-  if george_boole:
-    plt.show()
-  else:
-    plt.savefig(out, dpi=150, bbox_inches="tight")
-    display(Image("/content/plot.png"))  # /content/ is the default google colab dir that is given to u in their vm
-
+  plt.show()
   # types of questions
   person = 'person'
   select_question = random.randint(0, 2)
@@ -257,6 +275,7 @@ def v1_create():
   elif select_question == 2:
     question = f'{A} people were positive for COVID and {_A} people tested negative. How many people have tested for COVID? '
     answer = U
+  
 
   return question, answer
 
@@ -619,164 +638,320 @@ def venn_3_v3():
 
 ################################################################################
 # This venn_3 is for all of Set Theory besides v3
-def venn_3(venn_labels_list,venn_type='elements'):
 
-  font_size = 8
-  # initialize number of elements by section to scale diagram properly
-  An_Bn_C = 30  # 100/a (/)
-  _AnBn_C = 30  # 010/b (/)
-  AnBn_C  = 30  # 001/c -> 110
-  _An_BnC = 20  # 110/d -> 001
+def venn_3(venn_labels_list, venn_type='elements'):
+    font_size = 8
 
-  An_BnC  = 20  # 101/e (/)
-  _AnBnC  = 20  # 011/f (/)
-  AnBnC   = 10  # 111/g (/)
-  # _An_Bn_C = 0  # 000/h
+    # (your existing values)
+    An_Bn_C = 30; _AnBn_C = 30; AnBn_C = 30; _An_BnC = 20
+    An_BnC = 20; _AnBnC = 20; AnBnC = 10
 
-  #print(f"venn_labels_list {venn_labels_list}")
+    size_list = [An_Bn_C,_AnBn_C,_An_BnC,AnBn_C,An_BnC,_AnBnC,AnBnC]
+    venn_set_labels = ('A','B','C')
+    bit_list = ('100','010','001','110','101','011','111')
 
- # An_Bn_C = len(venn_labels_list[0])
- # _AnBn_C = len(venn_labels_list[1])
- # AnBn_C  = len(venn_labels_list[2])
- # _An_BnC = len(venn_labels_list[3])
- # An_BnC  = len(venn_labels_list[4])
- # _AnBnC  = len(venn_labels_list[5])
- # AnBnC   = len(venn_labels_list[6])
+    # Universe label
+    if venn_type == 'elements':
+        element_list = []
+        for sublist in venn_labels_list:
+            for element in sublist:
+                element_list.append(element)
+        element_list.sort()
+        U = str(element_list).replace("'",'').replace('[','{').replace(']','}')
+    elif venn_type in ('dnf','bit'):
+        U = ''
+    else:
+        U = '1'
 
-  # the size_list is for scaling purposes. Do not change the size_list.
-  size_list = [An_Bn_C,_AnBn_C,_An_BnC,AnBn_C,An_BnC,_AnBnC,AnBnC]
-  #print(f"size_list {size_list}")
+    # unpack provided labels
+    An_Bn_C  = venn_labels_list[0]
+    _AnBn_C  = venn_labels_list[1]
+    _An_BnC  = venn_labels_list[2]
+    AnBn_C   = venn_labels_list[3]
+    An_BnC   = venn_labels_list[4]
+    _AnBnC   = venn_labels_list[5]
+    AnBnC    = venn_labels_list[6]
+    _An_Bn_C = venn_labels_list[7]
 
-  venn_set_labels = ('A','B','C')
+    fig, ax = plt.subplots(figsize=(6, 6))
+    v = venn3(subsets=size_list, set_labels=venn_set_labels, ax=ax)
 
-  dnf_list = ('An_Bn_C','_AnBn_C','_An_BnC','AnBn_C','An_BnC','_AnBnC','AnBnC')
-  bit_list = ('100','010','001','110','101','011','111')
-  abc_list = ('a','b','c','d','e','f','g')
+    if v.set_labels:
+        for text in v.set_labels:
+            text.set_fontweight('bold')
 
-  # implement later
-  # dnf_var = [An_Bn_C,_AnBn_C,_An_BnC,AnBn_C,An_BnC,_AnBnC,AnBnC,_An_Bn_C]
-  # for i in range(len(dnf_var)):
-  #   dnf_var[i] = venn_labels_list[i]
+    for i in range(len(venn_labels_list)-1):
+        lbl = v.get_label_by_id(bit_list[i])
+        if lbl:
+            lbl.set_text(str(venn_labels_list[i]).replace('[','').replace(']','').replace("'",""))
 
-  An_Bn_C  = venn_labels_list[0]  # 100/a
-  _AnBn_C  = venn_labels_list[1]  # 010/b
-  _An_BnC  = venn_labels_list[2]  # 001/c
-  AnBn_C   = venn_labels_list[3]  # 110/d
-  An_BnC   = venn_labels_list[4]  # 101/e
-  _AnBnC   = venn_labels_list[5]  # 011/f
-  AnBnC    = venn_labels_list[6]  # 111/g
-  _An_Bn_C = venn_labels_list[7]  # 000/h
+    patch = v.get_patch_by_id('111')
+    if patch:
+        patch.set_color('white')
 
-  venn_labels = [An_Bn_C,_AnBn_C,_An_BnC,AnBn_C,An_BnC,_AnBnC,AnBnC,_An_Bn_C]
+    venn3_circles(subsets=size_list, linestyle="solid", linewidth=2, ax=ax)
 
-  if venn_type == 'cardinality':
-    element_count = 0
-    for sublist in venn_labels_list:
-        for element in sublist:
-            element_count += element
-    U = element_count  # total number of elements
+    if v.subset_labels:
+        for text in v.subset_labels:
+            if text: text.set_fontsize(font_size)
 
-  elif venn_type == 'elements':
-    element_list = []
+    ax.text(-0.2, 0.75, 'Venn Diagram')
+    ax.text(-0.7, 0.65, f'U = {U}').set_fontsize(font_size)
+    ax.text(0.4, -0.7, str(_An_Bn_C).replace('[','').replace(']','').replace("'",'')).set_fontsize(font_size)
 
-    for sublist in venn_labels_list:
-        for element in sublist:
-            element_list.append(element)
-    element_list.sort()
-    U = str(element_list).replace("'",'').replace('[','{').replace(']','}')
+    ax.set_facecolor('lightgray')
+    ax.set_axis_on()
 
-  elif venn_type == 'fractions':
-    U = '1'
+    return fig_to_static_url(fig)   # <-- return a /static URL
 
-  elif venn_type == 'decimals':
-    U = '1.000'
-
-  elif venn_type == 'percents':
-    U = '100%'
-
-  elif venn_type == 'dnf':
-    U = ''
-
-  elif venn_type == 'bit':
-    U = ''
-
-  else:
-    print('Invalid Venn Type')
-    return None
-
-  # depict venn diagram
-  v = venn3(subsets=(size_list),
-            set_labels=(venn_set_labels))
-
-  for text in v.set_labels:
-    text.set_fontweight('bold')
-
-  # set text to defined label id
-  for i in range(len(venn_labels_list)-1):
-    v.get_label_by_id(bit_list[i]).set_text(str(venn_labels_list[i]).replace('[','').replace(']','').replace("'",''))
-
-  # set color to defined path id
-  v.get_patch_by_id('111').set_color('white')
-
-  # add outline
-  venn3_circles(subsets=(size_list),
-                linestyle="solid",
-                linewidth=2)
-
-  for text in v.subset_labels:
-    text.set_fontsize(font_size)
-
-  #add text at (x, y)
-  plt.text(-0.2,0.75,'Venn Diagram')
-  plt.text(-0.7,0.65,f'U = {U}').set_fontsize(font_size)        # Universe
-  plt.text(0.4,-0.7, str(_An_Bn_C).replace('[','').replace(']','').replace("'",'')).set_fontsize(font_size)  # 000/h
-
-  # Change Backgroud
-  plt.gca().set_facecolor('lightgray')
-  plt.gca().set_axis_on()
-
-  plt.show()
-
-  return None
+#def venn_3(venn_labels_list,venn_type='elements'):
+#
+#  font_size = 8
+#  # initialize number of elements by section to scale diagram properly
+#  An_Bn_C = 30  # 100/a (/)
+#  _AnBn_C = 30  # 010/b (/)
+#  AnBn_C  = 30  # 001/c -> 110
+#  _An_BnC = 20  # 110/d -> 001
+#
+#  An_BnC  = 20  # 101/e (/)
+#  _AnBnC  = 20  # 011/f (/)
+#  AnBnC   = 10  # 111/g (/)
+#  # _An_Bn_C = 0  # 000/h
+#
+#  #print(f"venn_labels_list {venn_labels_list}")
+#
+# # An_Bn_C = len(venn_labels_list[0])
+# # _AnBn_C = len(venn_labels_list[1])
+# # AnBn_C  = len(venn_labels_list[2])
+# # _An_BnC = len(venn_labels_list[3])
+# # An_BnC  = len(venn_labels_list[4])
+# # _AnBnC  = len(venn_labels_list[5])
+# # AnBnC   = len(venn_labels_list[6])
+#
+#  # the size_list is for scaling purposes. Do not change the size_list.
+#  size_list = [An_Bn_C,_AnBn_C,_An_BnC,AnBn_C,An_BnC,_AnBnC,AnBnC]
+#  #print(f"size_list {size_list}")
+#
+#  venn_set_labels = ('A','B','C')
+#
+#  dnf_list = ('An_Bn_C','_AnBn_C','_An_BnC','AnBn_C','An_BnC','_AnBnC','AnBnC')
+#  bit_list = ('100','010','001','110','101','011','111')
+#  abc_list = ('a','b','c','d','e','f','g')
+#
+#  # implement later
+#  # dnf_var = [An_Bn_C,_AnBn_C,_An_BnC,AnBn_C,An_BnC,_AnBnC,AnBnC,_An_Bn_C]
+#  # for i in range(len(dnf_var)):
+#  #   dnf_var[i] = venn_labels_list[i]
+#
+#  An_Bn_C  = venn_labels_list[0]  # 100/a
+#  _AnBn_C  = venn_labels_list[1]  # 010/b
+#  _An_BnC  = venn_labels_list[2]  # 001/c
+#  AnBn_C   = venn_labels_list[3]  # 110/d
+#  An_BnC   = venn_labels_list[4]  # 101/e
+#  _AnBnC   = venn_labels_list[5]  # 011/f
+#  AnBnC    = venn_labels_list[6]  # 111/g
+#  _An_Bn_C = venn_labels_list[7]  # 000/h
+#
+#  venn_labels = [An_Bn_C,_AnBn_C,_An_BnC,AnBn_C,An_BnC,_AnBnC,AnBnC,_An_Bn_C]
+#
+#  if venn_type == 'cardinality':
+#    element_count = 0
+#    for sublist in venn_labels_list:
+#        for element in sublist:
+#            element_count += element
+#    U = element_count  # total number of elements
+#
+#  elif venn_type == 'elements':
+#    element_list = []
+#
+#    for sublist in venn_labels_list:
+#        for element in sublist:
+#            element_list.append(element)
+#    element_list.sort()
+#    U = str(element_list).replace("'",'').replace('[','{').replace(']','}')
+#
+#  elif venn_type == 'fractions':
+#    U = '1'
+#
+#  elif venn_type == 'decimals':
+#    U = '1.000'
+#
+#  elif venn_type == 'percents':
+#    U = '100%'
+#
+#  elif venn_type == 'dnf':
+#    U = ''
+#
+#  elif venn_type == 'bit':
+#    U = ''
+#
+#  else:
+#    print('Invalid Venn Type')
+#    return None
+#
+#  # depict venn diagram
+#
+#  fig, ax = plt.subplots(figsize=(6, 6))                                   
+#  v = venn3(subsets=size_list, set_labels=venn_set_labels, ax=ax)          
+#
+# # v = venn3(subsets=(size_list),
+# #           set_labels=(venn_set_labels))
+#
+#
+#  for text in v.set_labels:
+#    text.set_fontweight('bold')
+#
+#  # set text to defined label id
+#  for i in range(len(venn_labels_list)-1):
+#    lbl = v.get_label_by_id(bit_list[i])                                 
+#    if lbl:
+#      lbl.set_text(str(venn_labels_list[i]).replace('[','').replace(']','').replace("'",''))
+#    #v.get_label_by_id(bit_list[i]).set_text(str(venn_labels_list[i]).replace('[','').replace(']','').replace("'",''))
+#
+#  # set color to defined path id
+#
+#  patch = v.get_patch_by_id('111')                                         
+#  if patch:
+#      patch.set_color('white')
+#
+#  #v.get_patch_by_id('111').set_color('white')
+#
+#  # add outline
+# # venn3_circles(subsets=(size_list),
+# #               linestyle="solid",
+# #               linewidth=2)
+#
+#  venn3_circles(subsets=size_list, linestyle="solid", linewidth=2, ax=ax)  
+#
+#  for text in v.subset_labels:
+#    text.set_fontsize(font_size)
+#
+#  #add text at (x, y)
+##  plt.text(-0.2,0.75,'Venn Diagram')
+##  plt.text(-0.7,0.65,f'U = {U}').set_fontsize(font_size)        # Universe
+##  plt.text(0.4,-0.7, str(_An_Bn_C).replace('[','').replace(']','').replace("'",'')).set_fontsize(font_size)  # 000/h
+##
+##  # Change Backgroud
+##  plt.gca().set_facecolor('lightgray')
+##  plt.gca().set_axis_on()
+##
+##  plt.show()
+#  
+#  ax.text(-0.2, 0.75, 'Venn Diagram')                                      
+#  ax.text(-0.7, 0.65, f'U = {U}').set_fontsize(font_size)                  
+#  ax.text(0.4, -0.7, str(_An_Bn_C).replace('[','').replace(']','').replace("'",'')).set_fontsize(font_size)  
+#
+#  # Change Background
+#  # plt.gca().set_facecolor('lightgray')                                   
+#  # plt.gca().set_axis_on()                                                
+#  ax.set_facecolor('lightgray')                                            
+#  ax.set_axis_on()                                                         
+#
+#  # plt.show()                                                             
+#  # return None                                                            
+#  return fig_to_data_url(fig)                                             
 
 ################################################################################
  # working function sort of...
+
 def venn3_display_shuffle_diagram(venn_type):
+    min_elements, max_elements = 1, 24
+    min_num_elements, max_num_elements = 1, 3
+    num_of_regions = 8
 
-  min_elements = 1
-  max_elements = 24
-  min_num_elements = 1
-  max_num_elements = 3
+    if venn_type == 'num':
+        region_list = [[str(i+1)] for i in range(num_of_regions)]
+    elif venn_type == 'nums':
+        region_list = []
+        while len(region_list) < num_of_regions:
+            random_list = [
+                random.randint(min_elements, max_elements)
+                for _ in range(random.randint(min_num_elements, max_num_elements))
+            ]
+            if not any(el in sub for sub in region_list for el in random_list):
+                region_list.append(list(set(random_list)))
+    else:
+        region_list = ['a','b','c','d','e','f','g','h']  # fallback
 
-  num_of_regions = 8
-
-  region_list = ['a','b','c','d','e','f','g','h']
-
-  elements = True
-
-  if venn_type == 'num':
-    count = 0
-    region_list = []
-    for i in range(num_of_regions):
-      count += 1
-      region_list.append([str(count)])
-
-  elif venn_type == 'nums':
-    region_list = []
-
-    while len(region_list) < num_of_regions:
-      random_list = [random.randint(min_elements, max_elements) for _ in range(random.randint(min_num_elements, max_num_elements))]
-
-      if not any(element in sub for sub in region_list for element in random_list): # no duplicate elements in any other sublist in region_list
-        region_set = set(random_list) # no duplicates in the random_list
-        region_list.append(list(region_set))
+    random.shuffle(region_list)
+    img_url = venn_3(region_list, venn_type='elements')
+    return region_list, img_url
 
 
-  random.shuffle(region_list)
+#def venn3_display_shuffle_diagram(venn_type):
+#
+#    min_elements = 1
+#    max_elements = 24
+#    min_num_elements = 1
+#    max_num_elements = 3
+#
+#    num_of_regions = 8
+#
+#    region_list = ['a','b','c','d','e','f','g','h']
+#
+#    # elements = True   # (unused) -> remove
+#
+#    if venn_type == 'num':
+#        count = 0
+#        region_list = []
+#        for i in range(num_of_regions):
+#            count += 1
+#            region_list.append([str(count)])
+#
+#    elif venn_type == 'nums':
+#        region_list = []
+#        while len(region_list) < num_of_regions:
+#            random_list = [
+#                random.randint(min_elements, max_elements)
+#                for _ in range(random.randint(min_num_elements, max_num_elements))
+#            ]
+#            # no duplicate elements across sublists
+#            if not any(element in sub for sub in region_list for element in random_list):
+#                region_set = set(random_list)  # de-dupe within sublist
+#                region_list.append(list(region_set))
+#
+#    random.shuffle(region_list)
+#
+#    img_url = venn_3(region_list, venn_type='elements')
+#
+#    return region_list, img_url
 
-  venn_3(region_list, venn_type='elements')
-
-  return region_list
+#def venn3_display_shuffle_diagram(venn_type):
+#
+#  min_elements = 1
+#  max_elements = 24
+#  min_num_elements = 1
+#  max_num_elements = 3
+#
+#  num_of_regions = 8
+#
+#  region_list = ['a','b','c','d','e','f','g','h']
+#
+#  elements = True
+#
+#  if venn_type == 'num':
+#    count = 0
+#    region_list = []
+#    for i in range(num_of_regions):
+#      count += 1
+#      region_list.append([str(count)])
+#
+#  elif venn_type == 'nums':
+#    region_list = []
+#
+#    while len(region_list) < num_of_regions:
+#      random_list = [random.randint(min_elements, max_elements) for _ in range(random.randint(min_num_elements, max_num_elements))]
+#
+#      if not any(element in sub for sub in region_list for element in random_list): # no duplicate elements in any other sublist in region_list
+#        region_set = set(random_list) # no duplicates in the random_list
+#        region_list.append(list(region_set))
+#
+#
+#  random.shuffle(region_list)
+#
+#  venn_3(region_list, venn_type='elements')
+#
+#  return region_list
 
 ################################################################################
 
@@ -842,29 +1017,52 @@ def create(ques_type: str, condition: int) -> str:
 # Skills, Generator (diagram, questions, answer), Check
 
 # individual skill functions
+
 def venn3_to_dnf():
-  dnf_list = ['An_Bn_C','_AnBn_C','_An_BnC','AnBn_C','An_BnC','_AnBnC','AnBnC','_An_Bn_C']
-  bit_list = ['100','010','001','110','101','011','111','000']
+    dnf_list = ['An_Bn_C','_AnBn_C','_An_BnC','AnBn_C','An_BnC','_AnBnC','AnBnC','_An_Bn_C']
+    bit_list = ['100','010','001','110','101','011','111','000']
 
-  index = random.randint(0,7)
-  diagram_index = random.choice(QUESTION_TUPLE)
+    index = random.randint(0,7)
+    diagram_index = random.choice(QUESTION_TUPLE)  # e.g., 'bit' or 'nums'
 
-  if diagram_index == 'bit':
-    region_list = bit_list
-    venn_3(region_list, 'bit')
-  else:
-    region_list = venn3_display_shuffle_diagram(diagram_index)
+    if diagram_index == 'bit':
+        region_list = bit_list
+        img_url = venn_3(region_list, 'bit')
+    else:
+        region_list, img_url = venn3_display_shuffle_diagram(diagram_index)
 
-  #time.sleep(2)
+    if diagram_index == 'nums':
+        question = f"What is disjunctive normal form for elements {str(region_list[index]).replace('[','{').replace(']','}')}?"
+    else:
+        question = f"What is disjunctive normal form for region {str(region_list[index]).replace('[','').replace(']','')}?"
 
-  if diagram_index == 'nums':
-    question = f"What is disjunctive normal form for elements {str(region_list[index]).replace('[','{').replace(']','}') }? "
-  else:
-    question = f"What is disjunctive normal form for region {str(region_list[index]).replace('[','').replace(']','')}?"
+    answer = dnf_list[index]
+    return question, answer, img_url
 
-  answer = dnf_list[index]
 
-  return question, answer
+#def venn3_to_dnf():
+#  dnf_list = ['An_Bn_C','_AnBn_C','_An_BnC','AnBn_C','An_BnC','_AnBnC','AnBnC','_An_Bn_C']
+#  bit_list = ['100','010','001','110','101','011','111','000']
+#
+#  index = random.randint(0,7)
+#  diagram_index = random.choice(QUESTION_TUPLE)
+#
+#  if diagram_index == 'bit':
+#    region_list = bit_list
+#    venn_3(region_list, 'bit')
+#  else:
+#    region_list, img_url = venn3_display_shuffle_diagram(diagram_index)
+#
+#  #time.sleep(2)
+#
+#  if diagram_index == 'nums':
+#    question = f"What is disjunctive normal form for elements {str(region_list[index]).replace('[','{').replace(']','}') }? "
+#  else:
+#    question = f"What is disjunctive normal form for region {str(region_list[index]).replace('[','').replace(']','')}?"
+#
+#  answer = dnf_list[index]
+#
+#  return question, answer, img_url
 
 ################################################################################
 
@@ -872,13 +1070,13 @@ def venn3_to_bit():
   bit_list = ['100','010','001','110','101','011','111','000']
 
   index = random.randint(0,7)
-  region_list = venn3_display_shuffle_diagram('abc')
+  region_list, img_url = venn3_display_shuffle_diagram('abc')
 
   #time.sleep(1)
   question = f"What is bit stream form for region {str(region_list[index]).replace('[','').replace(']','')}?"
   answer = bit_list[index]
 
-  return question, answer
+  return question, answer, img_url
 
 ################################################################################
 def venn3_dnf_to_bit():
@@ -887,13 +1085,13 @@ def venn3_dnf_to_bit():
 
   index = random.randint(0, 7)
 
-  venn_3(region_list, 'dnf')
+  img_url = venn_3(region_list, 'dnf')
 
   #time.sleep(1)
   question = f"What is bit stream form for region {str(region_list[index]).replace('[','').replace(']','')}?"
   answer = bit_list[index]
 
-  return question, answer
+  return question, answer, img_url
 
 ################################################################################
 
@@ -903,13 +1101,13 @@ def venn3_bit_to_dnf():
 
   index = random.randint(0, 7)
 
-  venn_3(region_list, 'bit')
+  img_url = venn_3(region_list, 'bit')
 
   #time.sleep(1)
   question = f"What is Disjunctive Normal Form form for region {str(region_list[index]).replace('[','').replace(']','')}?"
   answer = dnf_list[index]
 
-  return question, answer
+  return question, answer, img_url
 
 ################################################################################
 
@@ -943,9 +1141,9 @@ def venn3_set_operators():
   answer = select_answer[pick_index]
 
   # dont need region_list for this func
-  region_list = venn3_display_shuffle_diagram('abc')
+  region_list, img_url = venn3_display_shuffle_diagram('abc')
 
-  return question, answer
+  return question, answer, img_url
 
 
 ### new imports from my own version of the_program 08/29 @ 4:33 PM ###
@@ -2444,7 +2642,7 @@ def rn_create():
   select_question_type = QUESTION_TUPLE[random.randint(0, len(QUESTION_TUPLE) - 1)]
 
   diagram_selection = select_question_type
-  region_list = venn3_display_shuffle_diagram(select_question_type)
+  region_list, img_url = venn3_display_shuffle_diagram(select_question_type)
 
   # we know that region_list = [100, 010, 001, 110, 101, 110, 111, 000]
 
@@ -2467,7 +2665,7 @@ def rn_create():
 
   question = f"What is the roster notation for {c_dnf}?: "
 
-  return question, set(new_answer)
+  return question, set(new_answer), img_url
 
 
 def get_cardinality_dnf(region_list, bits):
@@ -2500,7 +2698,7 @@ def ca_create():
   c_dnf, bits = get_bits_dnf('rn', '')
 
   diagram_selection = selection
-  region_list = venn3_display_shuffle_diagram(selection)
+  region_list, img_url = venn3_display_shuffle_diagram(selection)
 
   count, total = get_cardinality_dnf(region_list, bits)
 
@@ -2521,7 +2719,7 @@ def ca_create():
 
   print(f"COUNT: {count}")
 
-  return question, count
+  return question, count, img_url
 
 def ps_create():
 
@@ -2529,7 +2727,7 @@ def ps_create():
   c_dnf, bits = get_bits_dnf('ps', '')
 
   diagram_selection = selection
-  region_list = venn3_display_shuffle_diagram(selection)
+  region_list, img_url = venn3_display_shuffle_diagram(selection)
 
   count, total = get_cardinality_dnf(region_list, bits)
 
@@ -2611,7 +2809,7 @@ def ps_create():
 
   print(f'ANSWER: {answer}')
 
-  return question, answer
+  return question, answer, img_url
 
 # under construction
 # need better 'dm' questions
@@ -2621,7 +2819,7 @@ def dm_create():
   c_dnf, bits = get_bits_dnf('dm', '')
 
   diagram_selection = selection
-  region_list = venn3_display_shuffle_diagram(selection)
+  region_list, img_url = venn3_display_shuffle_diagram(selection)
 
   comb = ['000', '001', '010', '011', '100', '101', '110', '111']
 
@@ -2659,20 +2857,39 @@ def dm_create():
     for i in range(len(new_answer)):
       new_answer[i] = f'{new_answer[i]}'
 
-    return question, set(new_answer)
+    return question, set(new_answer), img_url
 
   else:
     question = f"What is the cardinality for _({c_dnf})?"
-    return question, total - count
+    return question, total - count, img_url
 
 def sb_create():
-  #['Given A = {xEN | 1 <= x <= 7}, what is the roster form?','{1,2,3,4,5,6,7}',fig_venn3,'nofig']
+  img_url="" # no img required for this question
 
-  nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+  natural_nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
   abc = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
 
+ # s_set = random.choices([natural_nums, abc], weights=[0, 1])[0]
+ # s_region = random.choices(['A', 'B', 'C'], weights=[.33, .33, .33])[0]
+#
+#  num_print = random.choice(("Natural", "Whole", "Integer"))
+#  less_or_more = 'less' if random.randint(0, 1) == 0 else 'more'
+#  num_used = random.randint(3, 10)
+#
+#  if less_or_more == 'less':
+#    question = f'Write the set of {num_print} numbers that is {less_or_more}
+#    than {num_used} in set builder notation.'
+#
+#  else:
+#    # we need to find less than or equal to the more number
+#    max_num = num_used + random.randint(1, 4)
+#    question = f'Write the set of {num_print} numbers that is {less_or_more}
+#    than {num_used} and less than {max_num} in set builder notation.'
+
+
+  #if s_set == abc:
   # s = select
-  s_set = random.choices([nums, abc], weights=[.5, .5])[0]
+  s_set = random.choices([natural_nums, abc], weights=[.5, .5])[0]
   s_region = random.choices(['A', 'B', 'C'], weights=[.33, .33, .33])[0]
 
   starting_index = random.randint(0, 4)
@@ -2685,126 +2902,37 @@ def sb_create():
   question = f"Given {s_region} = {countin_commas[0]}xEN | {set_l} <= x <= {last_set_l}{countin_commas[1]}, what is the roster form?"
 
   difference = ending_index - starting_index + 1
-
   answer = []
 
   for i in range(difference):
     answer.append(s_set[starting_index + i])
 
-  return question, str(answer).replace('[', '{').replace(']','}')
+  return question, str(answer), img_url
 
 
 ################################################################################
 
 def print_notation():
-  #print('############# CSC230 Discrete Math Program Notations #############')
-  print('#################################################################')
-  print(' Set Theory: ')
-  print(' "_" = Negation ')
-  print(' "n" = Intersection ')
-  print(' "u" = Union ')
-  print(' \n')
-  print(' Logic: ')
-  print(' "_" = Negation ')
-  print(' "^" = AND ')
-  print(' "v" = OR \n')
-  print('')
-  print('#################################################################')
-################################################################################
 
-def select_skills():
-
-  skills_list = []
-
-  print('############# CSC230 Discrete Math #############')
-  print('ALL - ALL Skills and Exit Selection')
-  print('############# Set Theory #############')
-  print('AS  - All Set Theory Sklls and Exit Selection')
-  print('vd  - Identify the Venn Disjunctive Normal Form') # (/)
-  print('vb  - Identify the Venn Bit Stream') # (/)
-  print('bd  - Bit Stream to Disjunctive Normal Form') # (/)
-  print('db  - Disjunctive Normal Form to Bit Stream')# (/)
-  print('so  - Set Operators (union(u), intersection(n), compliment(_)')# (/)
-  print('rn  - Roster Notation') # (/)
-  print('ca  - Cardinality') # (/)
-  print('ps  - Power Sets') # (/)
-  print('''dm  - DeMorgan's Law''')
-  print('sb  - Set Builder Notation')
-  print('ss  - Subsets & Proper Subsets')
-  print('v1  - Venn Diagram with 1 Set')
-  print('v2  - Venn Diagram with 2 Sets')
-  print('v3  - Venn Diagram with 3 Sets')
-  print('############# Logic ##########')
-  print('AL  - All Logic Skills and Exit Selection')
-  print('ls  - Logic Symbols')
-  print('pt  - Propositional Logic to Truth Table')
-  print('kp  - Karnaugh Map to Propositional Logic')
-  print('pk  - Propositional Logic to Karnaugh Map')
-  print('cp  - Circuit to Propositional Logic')
-  print('ck  - Circuit to Karnaugh Map')
-  print('ct  - Circuit to Truth Table')
-  # print('############# Proofs #############')
- # print('pe  - Proof by Equivalence')
- # # print('############# Induction #############')
- # print('############# Algorithms #############')
- # print('at  - Analyze Tables')
- # print('bo  - Big O Notation')
- # print('############# Counting #############')
- # print('pcf - Permutations and Combinations Facts')
- # print('per - Permutations')
- # print('com - Combinations')
- # print('cwp - (Under Construction) Counting Word Problems')
- # print('vo  - (Under Construction) Vocabulary')
-  print('############# Other ##########')
-  print('1   - All Notations')
-  print('2   - Report Bugs')
-  print('x   - Exit Selection')
-  print('##############################')
-
-  choice_list = ['ALL',
-                'AS','vb','vd','bd','db','so','rn','ca','ps','dm','sb','ss','v1','v2','v3',
-                'AL','ls','pt','kp','pk','cp', 'ct', 'ck', 'pe']
-
-  while True:
-    print(f'Current Selection: {skills_list}')
-    choice = input('Enter x to Exit or add a skill: ')
-    print('#####################################################################')
-    # check valid choice
-
-    if choice == str(1):
-      print_notation()
-      continue
-    if choice == '2':
-      print('! Send any bugs found to dsakanovic@sfsu.edu v jnavarro14@sfsu.edu!')
-      print('###################################################################')
-      continue
-
-    while choice not in choice_list and choice != 'x':
-      print('Invalid Choice')
-      choice = input('Enter x to Exit or add a skill: ')
-      print('#############################################################')
+  p_notation = '''
+  #################################################################
+  Set Theory: 
+  "_" = Negation 
+  "n" = Intersection 
+  "u" = Union 
+  \n')
+  Logic: 
+  "_" = Negation 
+  "^" = AND 
+  "v" = OR \n'
+  
+  #################################################################'''
+  
+  return p_notation
 
 
-    if choice == 'ALL':
-      skills_list = choice_list
-      break
-    if choice == 'AS':
-      skills_list = ['vb','vd','bd','db','so','rn','ca','ps','dm','sb','ss','v2','v3']
-      break
-    if choice == 'AL':
-      skills_list = ['ls','pt','kp','pk','cp','pe']
-      break
-    if choice == 'x':
-      if len(skills_list) == 0:
-        print('Thank you for using the program.')
-        print('#####################################################################')
-        sys.exit()
-      else:
-        break
-    else:
-      skills_list.append(choice)
 
-  print(f'Final Selection: {skills_list}')
+def distribute_skills(skills_list, ask_list):
 
   ask = int(input('How many questions would you like?: '))
 
@@ -3036,7 +3164,7 @@ def check(skills_list, ask_list):
         tries = 0 # number of tries
         question, answer = func() # this is calling the diagram
         # this fixed the issue with the diagram displaying over input box
-        # time.sleep(0.5)
+        time.sleep(0.5)
 
         # the \n fixes the auto adjustement of the page after every input
         print(f'{question} \n')
@@ -3051,23 +3179,6 @@ def check(skills_list, ask_list):
 
         unique_questions = ('ps') # dont touch they have their own process of being assessed
         fixed_types = ('vd', 'vb', 'db', 'bd', 'so', 'ca', 'sb', 'ro', 'ps')
-
-       # AS  - All Set Theory Sklls and Exit Selection
-       # vd  - Identify the Venn Disjunctive Normal Form
-       # vb  - Identify the Venn Bit Stream
-       # bd  - Bit Stream to Disjunctive Normal Form
-       # db  - Disjunctive Normal Form to Bit Stream
-       # so  - Set Operators (union(u), intersection(n), compliment(_)
-       # rn  - Roster Notation
-       # ca  - Cardinality
-       # ps  - Power Sets
-       # dm  - DeMorgan's Law
-       # sb  - Set Builder Notation
-       # ss  - Subsets & Proper Subsets
-       # v1  - Venn Diagram with 1 Set
-       # v2  - Venn Diagram with 2 Sets
-       # v3  - Venn Diagram with 3 Sets
-
 
         if type(answer) == set and skill not in unique_questions:
           if skill not in fixed_types:
@@ -3181,12 +3292,11 @@ def check(skills_list, ask_list):
 
         print('\n')
 
-
     end_time = time.time()
     total_time = round((end_time - start_time)/60,decimal_places)
 
     # under construction
-    skill_entry['percent'] = round((100*skill_entry['correct_questions']/skill_entry['num_questions']),decimal_places)
+    skill_entry['percent'] = round((100*skill_entry['correct_questions']/skill_entry['num_questions']), decimal_places)
     skill_entry['time'] = total_time
 
     # for each individual skill
@@ -3196,14 +3306,788 @@ def check(skills_list, ask_list):
 
 ################################################################################
 
+# redirect to a score page after program is finished
+
+# Ex:
+# ##### Skill Grades ######  Date: .. Time: ..
+# ...
+# ...
+
+# checking for spaces
+
+all_skills = {
+  'ALL': [x for x in choice_list if x not in ('AS', 'AL')],
+  'AS':  ['vb','vd','bd','db','so','rn','ca','ps','dm','sb','ss','v2','v3'],
+  'AL':  ['ls','pt','kp','pk','cp','pe']
+}
+
+def distribute_skills(skills_list, num_of_ques):
+
+  total_skills = len(skills_list)
+
+  ask_list = []
+  for i in range(total_skills):
+    ask_list.append(0)
+
+  counter = num_of_ques
+  while counter > 0:
+    for i in range(total_skills):
+      if counter > 0:
+          ask_list[i] += 1
+          counter -= 1
+
+  # check if asking less questions than skills selected
+  if num_of_ques < len(skills_list):
+    skills_list = skills_list[:num_of_ques]
+    ask_list = ask_list[:num_of_ques]
+
+  return ask_list
+
+def parse_selection(raw: str):
+  raw = (raw or "").strip()
+  parts = re.split(r"[,\s]+", raw)          
+  return [p for p in parts if p]
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+
+  # I need to return all prints into HTML strings
+  
+#  data = {
+#      "verify_print": f'<h1>\n\nVerify you are running the update from: {updated_on}.\n\n</h1>',
+#      "skill_grade_print": f'<h1>\n##########skill grades###############</h1>'
+#  }
+#  
+  verify_print = f'\n\nVerify you are running the update from: {updated_on}.\n\n'
+
+#v1  - Venn Diagram with 1 Set
+  
+  skills_menu = dedent('''
+############# CSC230 Discrete Math #############
+ALL - ALL Skills and Exit Selection
+################# Set Theory ###################
+AS  - All Set Theory Sklls and Exit Selection
+vd  - Identify the Venn Disjunctive Normal Form
+vb  - Identify the Venn Bit Stream
+bd  - Bit Stream to Disjunctive Normal Form
+db  - Disjunctive Normal Form to Bit Stream
+so  - Set Operators (union(u), intersection(n), compliment(_))
+rn  - Roster Notation
+ca  - Cardinality
+ps  - Power Sets
+dm  - DeMorgan's Law
+sb  - Set Builder Notation
+ss  - Subsets & Proper Subsets
+#### SKILLS BELOW ARE UNDER CONSTRUCTION #####
+v2  - Venn Diagram with 2 Sets
+v3  - Venn Diagram with 3 Sets
+################## Logic #####################
+AL  - All Logic Skills and Exit Selection
+ls  - Logic Symbols
+pt  - Propositional Logic to Truth Table
+kp  - Karnaugh Map to Propositional Logic
+pk  - Propositional Logic to Karnaugh Map
+cp  - Circuit to Propositional Logic
+ck  - Circuit to Karnaugh Map
+ct  - Circuit to Truth Table
+##############################################''').strip()
+
+#  check(skills_list, ask_list)
+
+#  skill_grade_print = f'\n##########skill grades###############'
+#  for i in range(len(skills_list)):
+#    skill_entry = skill_dict[skills_list[i]]
+#    percent = skill_entry['percent']
+#    time_ = skill_entry['time']
+#
+#    print(f"{skills_list[i]}: {percent}% in {time_} minutes.")
+#
+#  print('##################################### \n')
+  
+  # I need to display:
+  # menu
+  # questions
+  # results
+  
+  index_dic = {
+    "verify_print": verify_print,
+    "menu": skills_menu
+  }
+
+  # we are going post our selection
+  if request.method == "POST":
+    answer = request.form["ans"]
+    if answer in choice_list:
+      # we are making a selection
+      session["answer"] = answer
+  else:
+    return render_template("index.html", dic=index_dic)
+
+
+@app.route("/rubric")
+def rubric():
+  return render_template("rubric.html")
+
+@app.get("/selection/current")
+def selection_current():
+    current = session.get("current", [])
+    return render_template("partials/current.html", current=current)
+
+@app.post("/clear")
+def clear():
+  session.clear()
+  return render_template("partials/current.html", current=[])
+
+@app.post("/run")
+def run():
+
+  tokens = parse_selection(request.form.get("ans"))
+  prev = session.get("current", []) 
+
+  if isinstance(prev, str):         
+      prev = [prev]
+
+  allowed = set(choice_list) 
+  current = [c for c in prev if c in allowed] 
+
+  for code in tokens:
+      if code in allowed and code not in current:
+          current.append(code)
+
+  session["current"] = current
+
+  return render_template("partials/current.html", current=current)
+
+"""
+
+state lives in session. session is the duration of the users interaction with the application.
+if a user logs in, session starts, and when the user logs out, session is ended.
+
+fragments/partials: small HTML chunks that dont extend base.html(not a real page, just html logic)
+using HTMX im able to swap this fragment into #question-box 
+
+
+"""
+
+
+@app.route("/quiz", methods=["GET", "POST"])
+def quiz():
+    skills = session.get("current", [])
+
+    # Start/Update: rebuild everything when n is posted
+    if request.method == "POST" and ("n" in request.form):
+      n_raw = (request.form.get("n") or "").strip()
+      try:
+        n = int(n_raw)
+      except ValueError:
+        n = session.get("n", 10)
+      if n < 1:
+        n = 1
+      session["n"] = n
+      ask_list = reset_quiz_state(skills, n)
+    else:
+      n = session.get("n", 10)
+      ask_list = session.get("ask_list")
+      if ask_list is None:
+        ask_list = reset_quiz_state(skills, n)
+
+    # Return the full page. The question box is loaded via /quiz/current (HTMX).
+    return render_template(
+      "quiz.html",
+      skills=skills,
+      num_of_ques=n,
+      ask_list=ask_list,
+    )
+
+def clear_quiz_state(hard: bool = False):
+    """remove all quiz related session keys 
+    if we set hard=True flag then we will remove current skill list and # of questions asked.
+    """
+    for k in (
+      "ask_list", "queue", "qi", "tries", "score",
+      "current_q", "started_at", "progress", "decimal_places"
+    ):
+      session.pop(k, None)
+    if hard:
+      session.pop("current", None) # selected skills
+      session.pop("n", None) # question count
+
+def reset_quiz_state(skills, n, shuffle=False):
+    ask_list = distribute_skills(skills, n) if skills else []
+    session["ask_list"] = ask_list
+
+    queue = []
+
+    for s, c in zip(skills, ask_list):
+      queue.extend([s] * int(c))
+    if shuffle:
+      random.shuffle(queue)
+
+    session["queue"] = queue
+    session["qi"] = 0
+    session["tries"] = 2
+    session["score"] = 0
+    session["current_q"] = None
+    session["started_at"] = time.time()
+
+    # consistent keys with the scoreboard
+    session["progress"] = {
+        s: {"planned": int(c), "asked": 0, "correct": 0}
+        for s, c in zip(skills, ask_list) if c > 0
+    }
+
+    session["decimal_places"] = 2
+    return ask_list
+
+DEFAULT_N = 0
+
+@app.post("/quiz/restart")
+def quiz_restart():
+    hard = request.args.get("hard") == "1"
+    reset = request.args.get("reset") == "1"
+
+    # clear all quiz variables
+    clear_quiz_state(hard=hard)
+    
+    # soft restart = keep skills and # of questions asked
+    if not hard:
+      skills = session.get("current", [])
+      n = session.get("n", DEFAULT_N)
+      session["n"] = n
+      reset_quiz_state(skills, n)
+      if reset:
+        return quiz_current()  
+      else:
+        return redirect(url_for("quiz"))
+
+    # i dont think we'll need this tbh
+    if request.headers.get("HX-Request"):
+      return quiz_current()  # will create the first question and table of prev/curr quiz
+    # Fallback: reload the full page
+    return redirect(url_for("quiz"))
+
+
+# TODO: combine these normalize functions into one since they have same functionality
+def normalize_answer(a):
+
+  if type(a) == set:
+    a_list = []
+    
+    for x in a:
+      a_list.append(x)
+    
+    if a_list[0] in list(string.ascii_lowercase):
+      # we are dealing with a list of characters
+      region_list = {'a': 1,'b': 2,'c': 3,'d': 4,'e': 5,'f': 6,'g': 7,'h': 8}
+
+      for i in range(len(a_list)):
+        for j in range(0, len(a_list) - i - 1):
+          if region_list[a_list[j]] > region_list[a_list[j + 1]]:
+            a_list[j], a_list[j + 1] = a_list[j + 1], a_list[j]
+
+    else:
+
+      for i in range(len(a_list)):
+        a_list[i] = int(a_list[i])
+
+      for i in range(len(a_list)):
+        for j in range(0, len(a_list) - i - 1):
+          if a_list[j] > a_list[j + 1]:
+            a_list[j], a_list[j + 1] = a_list[j + 1], a_list[j]
+
+    a_list = str(a_list)
+    #print(f'a_list {a_list}')
+
+    return a_list
+
+  else:
+    a = str(a)
+
+    return (a or "").strip().replace(" ", "").lower()
+
+def normalize_user_input(user_input, skill):
+
+  user_ans_type_str = ['vd', 'vb', 'db', 'bd', 'so', 'ca', 'ps']
+
+  if skill not in user_ans_type_str:
+
+    char_set = any(c.islower() for c in user_input)
+
+    if not char_set:
+      # nums
+      u_list = [int(x) for x in re.findall(r'-?\d+', user_input)]
+      for i in range(len(u_list)):
+        for j in range(len(u_list) - i - 1):
+          if u_list[j] > u_list[j + 1]:
+            u_list[j], u_list[j + 1] = u_list[j + 1], u_list[j]
+    else:
+    
+      u_list = [x for x in user_input if x in set(string.ascii_lowercase)]
+      
+      #print(f'u_list str: {u_list}')
+      region_list = {'a': 1,'b': 2,'c': 3,'d': 4,'e': 5,'f': 6,'g': 7,'h': 8}
+
+      for i in range(len(u_list)):
+        for j in range(0, len(u_list) - i - 1):
+          if region_list[u_list[j]] > region_list[u_list[j + 1]]:
+            u_list[j], u_list[j + 1] = u_list[j + 1], u_list[j]
+  
+    if u_list:
+      u_list = str(u_list)
+      return (u_list or "").strip().replace(" ", "").lower()
+
+  else:
+    return (user_input or "").strip().replace(" ", "").lower()
+
+@app.get("/quiz/current")
+def quiz_current():
+
+  queue = session.get("queue", [])
+  qi = session.get("qi", 0)
+  tries = session.get("tries", 2)
+  score = session.get("score", 0)
+
+  finished = (qi >= len(queue))
+  state = session.get("current_q")
+
+  if not finished and state is None:
+    state = _create_next_question()
+
+  return render_template(
+    "partials/question.html",
+    finished=finished,
+    state=state,
+    tries=tries,
+    idx=qi,
+    total=len(queue),
+    message=None,
+    score=score,
+    per_skill=_build_per_skill_rows(), # always pass
+  )
+
+@app.post("/quiz/check")
+def quiz_check():
+
+  queue = session.get("queue", [])
+  qi = session.get("qi", 0)
+  tries = session.get("tries", 2)
+  score = session.get("score", 0)
+  state = session.get("current_q") or _create_next_question()
+
+  if state is None:
+    return render_template(
+      "partials/question.html",
+      finished=True,
+      score=score,
+      total=len(queue),
+      idx=qi,
+      message="No questions queued.",
+      per_skill=_build_per_skill_rows(),
+    )
+
+  vals = request.form.getlist("ans") # user input
+  user_ans = normalize_user_input(vals[-1], queue[qi]) if vals else ""
+
+  # we are getting the expected answer
+  expected = state.get("expected", "").replace(" ", "")
+  print(f"expected: {expected}")
+  message = None
+  
+  print(f'user_answer: {user_ans}')
+
+  if user_ans == expected:
+
+    # per skill correct
+    skill = state.get("skill")
+    prog = session.get("progress", {})
+
+    if skill in prog:
+      prog[skill]["correct"] = prog[skill].get("correct", 0) + (1 if tries == 2 else 0)
+      session["progress"] = prog
+
+    # advance to next question
+    qi += 1
+    tries = 2
+    message = "Correct!"
+
+    session["qi"] = qi
+    session["tries"] = tries
+    session["current_q"] = None
+
+    # overall score
+    score += 1
+    session["score"] = score
+
+  else:
+    tries = max(0, tries - 1)
+
+    session["tries"] = tries
+    if tries > 0:
+      # stay on same question
+      return render_template(
+        "partials/question.html",
+        finished=False,
+        state=state,
+        tries=tries,
+        idx=qi,
+        total=len(queue),
+        message=f"Try again. {tries} attempt left.",
+        score=score,
+        per_skill=_build_per_skill_rows(),   # <<< pass it here, too
+      )
+    else:
+      # out of tries 
+      qi += 1
+      session["qi"] = qi
+      tries = 2
+      session["tries"] = tries
+      session["current_q"] = None
+      message = ""
+
+  # finished?
+  if qi >= len(queue):
+    return render_template(
+      "partials/question.html",
+      finished=True,
+      score=score,
+      total=len(queue),
+      idx=qi,
+      message=message,
+      per_skill=_build_per_skill_rows(),
+    )
+
+  # next question
+  next_state = _create_next_question()
+  return render_template(
+    "partials/question.html",
+    finished=False,
+    state=next_state,
+    tries=session.get("tries", 2),
+    idx=session.get("qi", 0),
+    total=len(session.get("queue", [])),
+    message=message,
+    score=session.get("score", 0),
+    per_skill=_build_per_skill_rows(),
+  )
+
+
+def _build_per_skill_rows():
+
+    prog = session.get("progress") or {}
+    dp = session.get("decimal_places", 2)
+    rows = []
+
+    for s, info in prog.items():
+      planned = info.get("planned", 0)
+      asked = info.get("asked", 0)
+      correct = info.get("correct", 0)
+
+      pct_asked = round(100 * correct / asked, dp) if asked else 0.0
+      pct_planned = round(100 * correct / planned, dp) if planned else 0.0
+
+      rows.append({
+        "skill": s,
+        "correct": correct,
+        "asked": asked,
+        "planned": planned,
+        "percent": pct_asked, 
+        "percent_of_planned": pct_planned # eh not gna use
+      })
+
+    rows.sort(key=lambda r: (-r["asked"], r["skill"]))
+
+    return rows
+
+def _create_next_question():
+
+    """create and store the next question in session['current_q'], or None if finished"""
+
+    queue = session.get("queue", [])
+    qi = session.get("qi", 0)
+    
+    # we finished
+    if qi >= len(queue):
+      session["current_q"] = None
+      return None
+      
+    skill = queue[qi]
+    entry = skill_dict.get(skill)
+    if not entry or not callable(entry.get("function")):
+      # skip unknown
+      session["qi"] = qi + 1
+      return _create_next_question()
+
+    q, a, img_url = entry["function"]()  # must return (q, a, img_url)
+    print(f'answer: {a}')
+
+    # Mark this question as asked for that skill
+    prog = session.get("progress", {})
+    if skill in prog:
+      prog[skill]["asked"] = prog[skill].get("asked", 0) + 1
+      session["progress"] = prog
+
+    state = {
+      "skill": skill,
+      "question": q,
+      "img_url": img_url,
+      "expected": normalize_answer(a),
+    }
+    session["current_q"] = state
+    return state
+
+#@app.route("/quiz", methods=["GET", "POST"])
+#def quiz():
+#
+#    skills = session.get("current", [])
+#
+#    if request.method == "POST": 
+#        n_raw = (request.form.get("n") or "").strip() # n number of questions
+#        try:
+#            n = int(n_raw)
+#        except ValueError:
+#            n = session.get("n", 10)
+#        if n < 1:
+#            n = 1
+#        session["n"] = n
+#    else:
+#        n = session.get("n", 10)
+#
+#    ask_list = distribute_skills(skills, n) if skills else [] 
+#    # keep in session if other routes need it ( not rlly needed )
+#    session["ask_list"] = ask_list
+#
+#    ques_items = []
+#    total_questions = 0
+#
+#    # ['vb', 'vd']
+#    # [2, 2]
+#    # ((vb, 2), (vd, 2))
+#
+#    for skill, count in zip(skills, ask_list):
+#        if count <= 0:
+#            continue
+#        if skill not in skill_dict:
+#            continue
+#
+#        entry = dict(skill_dict[skill])
+#        entry["num_questions"] = count # assigning the num_questions for given skill
+#
+#        func = entry.get("function") 
+#        func_name = getattr(func, "__name__", None)
+#
+#        question, answer, img_url = func()
+#
+#        ques_items.append({
+#            "skill": skill,
+#            "skill_entry": entry,      
+#            "func_name": func_name, 
+#            "num_ques": count,         
+#            "question": question,
+#            "answer": answer,
+#            "img_url": img_url,
+#        })
+#
+#        total_questions += count
+#
+#    ques_info = {
+#        "items": ques_items,            
+#        "total_ques": total_questions, 
+#        "n_requested": n,
+#    }
+#
+#    return render_template(
+#        "quiz.html",
+#        skills=skills,
+#        num_of_ques=n,
+#        ask_list=ask_list,
+#        ques_info=ques_info,
+#    )
+#
+#          for _ in range(ask_list[i]):
+#
+#            tries = 0 # number of tries
+#            question, answer = func() # this is calling the diagram
+#
+#
+#
+#            # this fixed the issue with the diagram displaying over input box
+#            time.sleep(0.5)
+#
+#            # the \n fixes the auto adjustement of the page after every input
+#            print(f'{question} \n')
+#            user_input = input(f': ')
+#
+#            # edge case that crashed the program if user does ex: {1, 2, 3]
+#            # TODO: update this to also update num_wrong
+#
+#            # i want to fix this later. it feels sloppy
+#            user_ans_type_str = ['vd', 'vb', 'db', 'bd', 'so', 'ca']
+#            user_ans_type_set = ['sb', 'ro']
+#
+#            unique_questions = ('ps') # dont touch they have their own process of being assessed
+#            fixed_types = ('vd', 'vb', 'db', 'bd', 'so', 'ca', 'sb', 'ro', 'ps')
+#
+#            if type(answer) == set and skill not in unique_questions:
+#              if skill not in fixed_types:
+#                user_ans_type_set.append(skill)
+#            elif type(answer) == str or type(answer) == int and skill not in unique_questions:
+#              if skill not in fixed_types:
+#                user_ans_type_str.append(skill)
+#
+#            if skill in user_ans_type_str:
+#              user_input = str(user_input)
+#              answer = str(answer)
+#
+#            elif skill in user_ans_type_set:
+#              # we know the answer should return a set
+#              while ('{' in user_input or '}' in user_input) and ('[' in user_input or ']' in user_input) and type(answer) == set:
+#                print(f"Incorrect notation. Please use curly braces.")
+#                user_input = input(f'{question} \n')
+#
+#              while ('[' in user_input and ']' in user_input) and type(answer) == set:
+#                print(f"Incorrect notation. Please use curly braces.")
+#                user_input = input(f'{question} \n')
+#
+#              if '{' in user_input:
+#                import re
+#                import string
+#                # this is a "set" question
+#                # re.findall = finds which '\d' = ints(0-9) and '+' = matches one or more consecutive digits
+#                # \d+ → Match a full number (not just one digit at a time)
+#                # checks if there is any occurence of a character
+#                if_abc = any(x in string.ascii_lowercase for x in list(user_input))
+#                if not if_abc:
+#                  # this regular expression only fixes ints
+#                  using_findall = re.findall('\d+', user_input)
+#                  #print(f"using_findall: {using_findall}")
+#                  for i in range(len(using_findall)):
+#                    using_findall[i] = f'{using_findall[i]}'
+#
+#                  user_input = set(using_findall)
+#                else:
+#                  # we are dealing with chars/strings
+#                  user_input = set(re.findall('[a-zA-Z]+', user_input))
+#
+#            elif skill == 'ps':
+#              # we know the answer should return a string
+#              # subsets = [[], [17], [6], [1], [17, 6], [17, 1], [6, 1], [17, 6, 1]]
+#              # we are getting {{}, {17}, {6}, {1}, {17, 6}, {17, 1}, {1, 6}, {1, 6, 17}}
+#
+#              if '{' in user_input:
+#                # we are dealing with powersets
+#                #Your answer: ['{{}', ' {3}', ' {3', ' 4}', ' {4}}']
+#
+#                #list: ['{', '{', '}', ',', ' ', '{', '3', '}', ',', ' ', '{', '4', '}', ',', ' ', '{', '3', ',', ' ', '4', '}', '}']
+#                while '{' != user_input[0] or '{' != user_input[1]:
+#                  print(f'Did you forget a curly brace at the start? ')
+#                  user_input = input(f'{question} \n')
+#
+#                while '}' != user_input[len(user_input) - 1] or '}' != user_input[len(user_input) - 2]:
+#                  print(f'Did you forget a curly brace at the end? ')
+#                  user_input = input(f'{question} \n')
+#
+#                user_input = list(user_input)
+#                for i in range(len(user_input)):
+#                  if user_input[i] == '{':
+#                    user_input[i] = '['
+#                  elif user_input[i] == '}':
+#                    user_input[i] = ']'
+#
+#                import ast
+#                try:
+#                  #ast.literal_eval replaces "[1, 2]" into [1, 2]
+#                  # converts strings that look like a ds into actual python ds
+#                  user_input = ast.literal_eval(''.join(user_input))#godspeed
+#                except SyntaxError as e:
+#                  # update num_wrong here ???
+#                  print(f"  {e.text.strip()}\n  {' ' * (e.offset - 1)}^\nSyntaxError: {e.msg}")
+#                  print(f'Maybe you included a "." or "/" in your response?\n')
+#                  user_input = input(f'{question} \n')
+#
+#                print(f'after join: user_input {user_input}')
+#                print(f'user_input type: {type(user_input)}')
+#
+#                #ewwwwwwwwwwwwwwwwww
+#                # TODO: refactor later
+#                for i in range(len(user_input)):
+#                  curr = user_input[i]
+#                  for _ in range(len(curr) - 1):
+#                    for j in range(len(curr) - 1):
+#                      if curr[j] > curr[j + 1]:
+#                        curr[j], curr[j + 1] = curr[j + 1], curr[j]
+#
+#                user_input = sorted(user_input)
+#              else:
+#                user_input, answer = str(user_input), str(answer)
+#            
+#            # checking if answer is correct
+#            while True:
+#              if user_input == answer:
+#                if tries == 0:
+#                  print('Correct')
+#                  skill_entry['correct_questions'] += 1
+#                elif tries == 1:
+#                  print('Correct')
+#                break
+#              else:
+#                tries += 1
+#                print('Try Again. \n') 
+#                user_input = input(': ')
+#                if tries == 1:
+#                  print(f'Incorrect. Correct answer is {answer} \n')
+#                  break
+#
+#            print('\n')
+#
+#        end_time = time.time()
+#        total_time = round((end_time - start_time)/60,decimal_places)
+#
+#        # under construction
+#        skill_entry['percent'] = round((100*skill_entry['correct_questions']/skill_entry['num_questions']), decimal_places)
+#        skill_entry['time'] = total_time
+#
+#        # for each individual skill
+#        print(f'Total Questions: {total_questions}')
+#
+#      return None
+
+ # print('\n##########Skill Grades###############')
+ # for i in range(len(skills_list)):
+ #   skill_entry = skill_dict[skills_list[i]]
+ #   percent = skill_entry['percent']
+ #   time_ = skill_entry['time']
+
+ #   print(f"{skills_list[i]}: {percent}% in {time_} minutes.")
+    
+
+
+
+@app.route("/help")
+def help():
+  return render_template("help.html")
+
+@app.route("/about", methods=["GET", "POST"])
+def about():
+
+  heads_tails = random.randint(0, 1)
+
+  if heads_tails == 1:
+    answer = "Heads"
+  else:
+    answer = "Tails"
+  
+  random_dic = {
+      "answer": answer
+  }
+
+  return render_template("about.html", random_dic=random_dic)
+
 def main():
 
   print(f'\n\nVerify you are running the update from: {updated_on}.\n\n')
-
   while True:
 
     skills_list, ask_list = select_skills()
-
     check(skills_list, ask_list)
 
     print('\n##########Skill Grades###############')
@@ -3222,5 +4106,7 @@ def main():
 ################################################################################
 
 if __name__ == "__main__":
-  main()
+  #main()
+  app.run(debug=True)
+
 
